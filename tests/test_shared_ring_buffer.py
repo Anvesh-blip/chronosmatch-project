@@ -56,3 +56,50 @@ def test_wrap_around():
         assert get_order(memory) is None
     finally:
         memory.close()
+
+@pytest.mark.parametrize(
+    "order_id, price_ticks, quantity, side, error",
+    [
+        (-1, 15025, 1, 0, ValueError),
+        (1, 0, 1, 0, ValueError),
+        (1, 15025, 0, 0, ValueError),
+        (1, 15025, 1, 2, ValueError),
+        ("abc", 15025, 1, 0, TypeError),
+        (1, 15025, -1, 0, ValueError),
+        (1, 15025, 1, 0.5, TypeError),
+        (1, 15025, 1, True, TypeError),
+        (1, 15025, 1 << 32, 0, ValueError),
+    ],
+)
+def test_invalid_orders(
+    order_id, price_ticks, quantity, side, error
+):
+    memory = create_memory()
+    try:
+        with pytest.raises(error):
+            put_order(memory, order_id, price_ticks, quantity, side)
+
+        # Invalid orders must not enter the buffer.
+        assert get_order(memory) is None
+    finally:
+        memory.close()
+
+def test_invalid_order_preserves_existing_order():
+    memory=create_memory()
+    try:
+        put_order(memory,1001,15606,7,0)
+        with pytest.raises(ValueError):
+            put_order(memory, 1002, 15606, -5, 0)
+            assert get_order(memory)== (1001, 15606, 7, 0)
+    finally:
+        memory.close()
+
+
+def test_open_shared_memory_missing_file(tmp_path):
+    from src.ipc.shared_ring_buffer import open_shared_memory
+
+    missing_file = tmp_path / "missing.dat"
+
+    with pytest.raises(FileNotFoundError):
+        open_shared_memory(str(missing_file))
+
