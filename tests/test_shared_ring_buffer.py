@@ -8,6 +8,8 @@ from src.ipc.shared_ring_buffer import (
     put_order,
     get_order,
 )
+from multiprocessing import Lock
+from src.ipc.shared_ring_buffer import put_order_locked, get_order_locked
 
 
 def create_memory():
@@ -102,4 +104,13 @@ def test_open_shared_memory_missing_file(tmp_path):
 
     with pytest.raises(FileNotFoundError):
         open_shared_memory(str(missing_file))
+def test_locked_put_and_get():
+    memory = create_memory()
+    lock = Lock()
 
+    try:
+        put_order_locked(lock, memory, 2002, 15025, 10, 0)
+        assert get_order_locked(lock, memory) == (2002, 15025, 10, 0)
+        assert get_order_locked(lock, memory) is None
+    finally:
+        memory.close()
