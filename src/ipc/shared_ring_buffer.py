@@ -1,3 +1,19 @@
+"""
+Shared-memory ring buffer for ChronosMatch.
+
+Binary order format (!IIII):
+    order_id:    unsigned 32-bit integer
+    price_ticks: unsigned 32-bit integer (100 ticks per rupee)
+    quantity:    unsigned 32-bit integer
+    side:        0 = BUY, 1 = SELL
+
+Each order occupies 16 bytes.
+The 8-byte header stores the read and write indexes.
+The buffer has 1024 slots, with 1023 usable at a time.
+
+Producer and consumer must use the same shared memory file
+and coordinate access to the indexes with a shared lock.
+"""
 import mmap
 import os
 import struct
@@ -98,6 +114,20 @@ def get_order(memory):
     set_indices(memory, next_read, write_index)
 
     return order
+def create_shared_memory(filename="shared_orders.dat"):
+    with open(filename, "w+b") as file_handle:
+        file_handle.truncate(BUFFER_SIZE)
+
+    file_handle = open(filename, "r+b")
+
+    try:
+        memory = mmap.mmap(file_handle.fileno(), BUFFER_SIZE)
+        initialize_header(memory)
+        memory.flush()
+        return file_handle, memory
+    except Exception:
+        file_handle.close()
+        raise
 
 def open_shared_memory(filename="shared_orders.dat"):
     file_handle = open(filename, "r+b")
