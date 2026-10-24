@@ -12,7 +12,15 @@ from src.ipc.shared_ring_buffer import (
 def producer_process(filename, lock, ready):
     file_handle, memory = open_shared_memory(filename)
     try:
-        put_order_locked(lock, memory, 2002, 15025, 10, 0)
+        orders = [
+            (2002, 15025, 10, 0),
+            (2003, 15100, 5, 1),
+            (2004, 15250, 8, 0),
+        ]
+
+        for order in orders:
+            put_order_locked(lock, memory, *order)
+
         memory.flush()
         ready.set()
     finally:
@@ -27,8 +35,13 @@ def consumer_process(filename, lock, ready, result):
 
     file_handle, memory = open_shared_memory(filename)
     try:
-        order = get_order_locked(lock, memory)
-        result.put(order)
+        orders = []
+
+        for _ in range(3):
+            order = get_order_locked(lock, memory)
+            orders.append(order)
+
+        result.put(orders)
     finally:
         memory.close()
         file_handle.close()
@@ -66,7 +79,11 @@ def test_two_processes_share_order(tmp_path):
         assert not consumer.is_alive(), "Consumer process hung"
         assert producer.exitcode == 0
         assert consumer.exitcode == 0
-        assert result.get(timeout=2) == (2002, 15025, 10, 0)
+        assert result.get(timeout=2) == [
+            (2002, 15025, 10, 0),
+            (2003, 15100, 5, 1),
+            (2004, 15250, 8, 0),
+        ]
     finally:
         for process in (producer, consumer):
             if process.is_alive():
