@@ -6,31 +6,35 @@ from src.ipc.shared_ring_buffer import (
 )
 
 
+STOP_ORDER_ID = 0
+
+
 def consumer(lock):
     file_handle, memory = open_shared_memory("shared_orders.dat")
 
     try:
-        order = None
+        print("Consumer started. Waiting for orders...")
 
-        # Wait up to 5 seconds for an order.
-        deadline = time.monotonic() + 5
-
-        while order is None and time.monotonic() < deadline:
+        while True:
             order = get_order_locked(lock, memory)
 
             if order is None:
                 time.sleep(0.001)
+                continue
 
-        if order is None:
-            print("No orders received within 5 seconds.")
-            return
+            order_id, price_ticks, quantity, side = order
 
-        order_id, price_ticks, quantity, side = order
+            # A special order ID tells the consumer to stop.
+            if order_id == STOP_ORDER_ID:
+                print("Stop signal received. Consumer exiting.")
+                break
 
-        print("Order ID:", order_id)
-        print("Price ticks:", price_ticks)
-        print("Quantity:", quantity)
-        print("Side:", "BUY" if side == 0 else "SELL")
+            print(
+                f"Order ID: {order_id}, "
+                f"Price ticks: {price_ticks}, "
+                f"Quantity: {quantity}, "
+                f"Side: {'BUY' if side == 0 else 'SELL'}"
+            )
 
     finally:
         memory.close()

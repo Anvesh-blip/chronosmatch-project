@@ -8,11 +8,22 @@ def producer(lock):
     file_handle, memory = open_shared_memory("shared_orders.dat")
 
     try:
-        put_order_locked(lock, memory, 2002, 15025, 10, 0)
-        memory.flush()
+        orders = [
+            (2002, 15025, 10, 0),  # BUY
+            (2003, 15100, 5, 1),   # SELL
+            (2004, 15250, 8, 0),   # BUY
+        ]
 
-        print("Order written successfully!")
-        print("Order: ID=2002, Price=15025, Quantity=10, Side=BUY")
+        for order in orders:
+            put_order_locked(lock, memory, *order)
+            memory.flush()
+            print(f"Submitted order: {order}")
+
+        # Send the stop signal after all normal orders.
+        put_order_locked(lock, memory, 0, 1, 1, 0)
+        memory.flush()
+        print("Stop signal submitted.")
+
     finally:
         memory.close()
         file_handle.close()
