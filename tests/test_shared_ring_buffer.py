@@ -138,3 +138,28 @@ def test_create_shared_memory(tmp_path):
     finally:
         memory.close()
         file_handle.close()
+def test_file_backed_producer_consumer(tmp_path):
+    from src.ipc.shared_ring_buffer import (
+        create_shared_memory,
+        open_shared_memory,
+    )
+
+    filename = str(tmp_path / "integration_orders.dat")
+
+    # Producer creates the shared-memory file and writes an order.
+    producer_file, producer_memory = create_shared_memory(filename)
+    try:
+        put_order(producer_memory, 2002, 15025, 10, 0)
+        producer_memory.flush()
+    finally:
+        producer_memory.close()
+        producer_file.close()
+
+    # Consumer opens the same file and reads the order.
+    consumer_file, consumer_memory = open_shared_memory(filename)
+    try:
+        assert get_order(consumer_memory) == (2002, 15025, 10, 0)
+        assert get_order(consumer_memory) is None
+    finally:
+        consumer_memory.close()
+        consumer_file.close()
