@@ -27,11 +27,14 @@ def main():
 
     # Check that both processes completed successfully.
     if producer_process.exitcode != 0:
-        raise RuntimeError("Producer process failed")
+        raise RuntimeError(
+        f"Producer process failed: {producer_process.exitcode}"
+    )
 
     if consumer_process.exitcode != 0:
-        raise RuntimeError("Consumer process failed")
-
+        raise RuntimeError(
+        f"Consumer process failed: {consumer_process.exitcode}"
+    )
 
 if __name__ == "__main__":
     main()
