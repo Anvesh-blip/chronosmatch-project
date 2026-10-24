@@ -86,15 +86,21 @@ def test_invalid_orders(
     finally:
         memory.close()
 
+
 def test_invalid_order_preserves_existing_order():
-    memory=create_memory()
+    memory = create_memory()
     try:
-        put_order(memory,1001,15606,7,0)
+        put_order(memory, 1001, 15606, 7, 0)
+
         with pytest.raises(ValueError):
             put_order(memory, 1002, 15606, -5, 0)
-            assert get_order(memory)== (1001, 15606, 7, 0)
+
+        # The invalid order must not overwrite the valid order.
+        assert get_order(memory) == (1001, 15606, 7, 0)
+        assert get_order(memory) is None
     finally:
         memory.close()
+
 
 
 def test_open_shared_memory_missing_file(tmp_path):
@@ -114,3 +120,21 @@ def test_locked_put_and_get():
         assert get_order_locked(lock, memory) is None
     finally:
         memory.close()
+
+def test_create_shared_memory(tmp_path):
+    from src.ipc.shared_ring_buffer import (
+        create_shared_memory,
+        get_indices,
+        BUFFER_SIZE,
+    )
+
+    filename = str(tmp_path / "shared_orders.dat")
+
+    file_handle, memory = create_shared_memory(filename)
+
+    try:
+        assert len(memory) == BUFFER_SIZE
+        assert get_indices(memory) == (0, 0)
+    finally:
+        memory.close()
+        file_handle.close()
