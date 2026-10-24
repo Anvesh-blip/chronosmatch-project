@@ -1,12 +1,18 @@
-import mmap
-import struct
+from src.ipc.shared_ring_buffer import (
+    open_shared_memory,
+    put_order_locked,
+)
 
-with open("orders.dat", "w+b") as file:
-    file.write(b"\x00" * 32)
-    file.flush()
 
-    with mmap.mmap(file.fileno(), 32) as memory:
-        struct.pack_into("!IIII", memory, 16, 2002, 15025, 10, 0)
+def producer(lock):
+    file_handle, memory = open_shared_memory("shared_orders.dat")
+
+    try:
+        put_order_locked(lock, memory, 2002, 15025, 10, 0)
         memory.flush()
 
         print("Order written successfully!")
+        print("Order: ID=2002, Price=15025, Quantity=10, Side=BUY")
+    finally:
+        memory.close()
+        file_handle.close()

@@ -1,12 +1,24 @@
+from src.ipc.shared_ring_buffer import (
+    open_shared_memory,
+    get_order_locked,
+)
 
-import mmap
-import struct
 
-with open("orders.dat", "r+b") as file:
-    with mmap.mmap(file.fileno(), 32) as memory:
-        order = struct.unpack_from("!IIII", memory, 16)
+def consumer(lock):
+    file_handle, memory = open_shared_memory("shared_orders.dat")
 
-        print("Order ID:", order[0])
-        print("Price:", order[1])
-        print("Quantity:", order[2])
-        print("Side:", "BUY" if order[3] == 0 else "SELL")
+    try:
+        order = get_order_locked(lock, memory)
+
+        if order is None:
+            print("No orders available.")
+        else:
+            order_id, price_ticks, quantity, side = order
+
+            print("Order ID:", order_id)
+            print("Price ticks:", price_ticks)
+            print("Quantity:", quantity)
+            print("Side:", "BUY" if side == 0 else "SELL")
+    finally:
+        memory.close()
+        file_handle.close()
