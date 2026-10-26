@@ -1,5 +1,5 @@
 import time
-
+from src.engine.order_book import OrderBook
 from src.ipc.shared_ring_buffer import (
     open_shared_memory,
     get_order_locked,
@@ -12,6 +12,7 @@ STOP_TIMEOUT_SECONDS = 10
 
 def consumer(lock,stop_timeout=STOP_TIMEOUT_SECONDS):
     file_handle, memory = open_shared_memory("shared_orders.dat")
+    order_book = OrderBook()
 
     try:
         print("Consumer started. Waiting for orders...")
@@ -42,6 +43,15 @@ def consumer(lock,stop_timeout=STOP_TIMEOUT_SECONDS):
                 f"Quantity: {quantity}, "
                 f"Side: {'BUY' if side == 0 else 'SELL'}"
             )
+            trades = order_book.add_order(
+                order_id,
+                side,
+                price_ticks,
+                quantity,
+            )
+
+            for trade in trades:
+                print(f"TRADE: {trade}")
 
     finally:
         memory.close()
