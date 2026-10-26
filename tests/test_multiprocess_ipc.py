@@ -1,6 +1,4 @@
 import multiprocessing
-import time
-
 from src.ipc.shared_ring_buffer import (
     create_shared_memory,
     open_shared_memory,
