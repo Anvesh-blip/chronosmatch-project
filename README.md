@@ -58,3 +58,15 @@ The matching engine must agree with the IPC module on:
 - Ring-buffer index and full/empty conventions
 
 The current Python implementation uses a shared multiprocessing lock. A native Cython consumer will need compatible synchronization before accessing the buffer concurrently.
+
+## Matching Engine Integration
+
+The consumer passes each received order to src/engine/order_book.py.
+
+- BUY side is 0; SELL side is 1.
+- Orders match when their prices cross or equal the opposite best price.
+- Trades execute at the resting order price.
+- Unfilled quantities remain in the order book.
+- Order ID 0 is reserved as the consumer stop signal.
+
+Run the integrated demo with `python run_ipc.py` and run tests with `python -m pytest -v`.
