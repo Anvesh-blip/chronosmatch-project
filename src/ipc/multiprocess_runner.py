@@ -13,6 +13,7 @@ import os
 import time
 import struct
 from src.engine.order_book import OrderBook
+from src.dashboard.metrics import PerformanceMetrics
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -95,6 +96,7 @@ def consumer_process_worker(
 
         # Create one matching engine for this consumer process
         order_book = OrderBook()
+        metrics = PerformanceMetrics()
 
         orders_drained = 0
         trades_executed = 0
@@ -134,13 +136,18 @@ def consumer_process_worker(
                 prev_order_id = order_id
                 last_order_id = order_id
 
-                # Execute matching through the OrderBook
+                # Measure matching-engine processing latency
+                start_ns = time.perf_counter_ns()
+
                 trades = order_book.add_order(
                     order_id,
                     side,
                     price_ticks,
                     quantity,
                 )
+
+                end_ns = time.perf_counter_ns()
+                metrics.record_latency(start_ns, end_ns)
 
                 # Update trade statistics
                 trades_executed += len(trades)
@@ -188,13 +195,18 @@ def consumer_process_worker(
             prev_order_id = order_id
             last_order_id = order_id
 
-            # Match remaining orders too
+            # Measure matching-engine processing latency
+            start_ns = time.perf_counter_ns()
+
             trades = order_book.add_order(
                 order_id,
                 side,
                 price_ticks,
                 quantity,
             )
+
+            end_ns = time.perf_counter_ns()
+            metrics.record_latency(start_ns, end_ns)
 
             trades_executed += len(trades)
 
@@ -209,6 +221,7 @@ def consumer_process_worker(
             "status": "success",
             "orders_drained": orders_drained,
             "first_order_id": first_order_id,
+	        "matching_metrics": metrics.get_summary(),
             "last_order_id": last_order_id,
             "fifo_violations": fifo_violations,
             "trades_executed": trades_executed,
