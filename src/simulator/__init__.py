@@ -1,10 +1,4 @@
 """Market simulator module for ChronosMatch."""
-from src.simulator.market_simulator import (
-    MarketSimulator,
-    SimulatorConfig,
-    SimulationMetrics,
-    OrderGenerator,
-)
 
 __all__ = [
     "MarketSimulator",
@@ -12,3 +6,12 @@ __all__ = [
     "SimulationMetrics",
     "OrderGenerator",
 ]
+
+
+def __getattr__(name):
+    if name in __all__:
+        from src.simulator import market_simulator
+
+        return getattr(market_simulator, name)
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
