@@ -459,7 +459,7 @@ def _run_multiprocess_cli(args: argparse.Namespace) -> int:
     """Run cross-process simulation using Windows spawn."""
 
     from src.ipc.multiprocess_runner import run_multiprocess_simulation
-
+    from src.dashboard.terminal_ui import run_dashboard
     print(" Launching cross-process simulation (Windows spawn method)...")
     print(" Producer: MarketSimulator process | Consumer: Matching engine reader process")
     print("=" * 65)
@@ -549,7 +549,12 @@ def _run_multiprocess_cli(args: argparse.Namespace) -> int:
 
     print(border)
 
+    if cons_res.get("status") == "success":
+        matching_summary = cons_res.get("matching_metrics", {})
+        run_dashboard(matching_summary)
+
     return 0
+
 
 
 async def main_async(args: argparse.Namespace) -> int:
