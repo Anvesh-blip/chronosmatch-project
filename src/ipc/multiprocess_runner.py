@@ -10,6 +10,7 @@ import asyncio
 import logging
 import multiprocessing
 import os
+import queue
 import time
 import struct
 from src.engine.order_book import OrderBook
@@ -247,6 +248,7 @@ def consumer_process_worker(
             rb.close()
 
 
+
 def run_multiprocess_simulation(
     total_orders: int = 1000,
     orders_per_second: Optional[float] = None,
@@ -258,13 +260,15 @@ def run_multiprocess_simulation(
     file_path: Optional[str] = None,
     timeout: float = 30.0,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Run an end-to-end multi-process simulation using the spawn method.
+    """Run an end-to-end multi-process simulation using spawn.
 
     Returns:
-        Tuple of (producer_results_dict, consumer_results_dict)
+        Tuple of (producer_results_dict, consumer_results_dict).
     """
+
     ctx = multiprocessing.get_context("spawn")
     shared_lock = ctx.Lock()
+
     ready_producer = ctx.Event()
     ready_consumer = ctx.Event()
     stop_consumer = ctx.Event()
@@ -281,65 +285,172 @@ def run_multiprocess_simulation(
         "on_retry_exhausted": on_retry_exhausted,
     }
 
-    with BinaryRingBufferContext(file_path=file_path, lock=shared_lock) as parent_rb:
-        str_path = str(parent_rb.file_path)
+    producer_p = None
+    consumer_p = None
+    started_processes = []
 
-        consumer_p = ctx.Process(
-            target=consumer_process_worker,
-            args=(
-                str_path,
-                shared_lock,
-                total_orders,
-                stop_consumer,
-                consumer_q,
-                ready_consumer,
-                consumer_startup_delay,
-            ),
-            name="ChronosConsumerProcess",
-        )
-        producer_p = ctx.Process(
-            target=producer_process_worker,
-            args=(str_path, shared_lock, config_dict, producer_q, ready_producer),
-            name="ChronosProducerProcess",
-        )
+    try:
+        with BinaryRingBufferContext(
+            file_path=file_path,
+            lock=shared_lock,
+        ) as parent_rb:
 
-        consumer_p.start()
-        producer_p.start()
+            str_path = str(parent_rb.file_path)
 
-        # Wait for both processes to signal readiness
-        ready_consumer.wait(timeout=5.0)
-        ready_producer.wait(timeout=5.0)
+            consumer_p = ctx.Process(
+                target=consumer_process_worker,
+                args=(
+                    str_path,
+                    shared_lock,
+                    total_orders,
+                    stop_consumer,
+                    consumer_q,
+                    ready_consumer,
+                    consumer_startup_delay,
+                ),
+                name="ChronosConsumerProcess",
+            )
 
-        t_e2e_start = time.perf_counter()
+            producer_p = ctx.Process(
+                target=producer_process_worker,
+                args=(
+                    str_path,
+                    shared_lock,
+                    config_dict,
+                    producer_q,
+                    ready_producer,
+                ),
+                name="ChronosProducerProcess",
+            )
 
-        # Wait for producer to finish
-        producer_p.join(timeout=timeout)
-        if producer_p.is_alive():
-            producer_p.terminate()
-            raise TimeoutError("Producer process timed out during simulation")
+            consumer_p.start()
+            started_processes.append(consumer_p)
 
-        # Allow consumer time to drain, then signal stop
+            producer_p.start()
+            started_processes.append(producer_p)
+
+            # Check that both workers become ready.
+            if not ready_consumer.wait(timeout=10.0):
+                raise TimeoutError(
+                    f"Consumer failed to become ready. "
+                    f"Exit code: {consumer_p.exitcode}"
+                )
+
+            if not ready_producer.wait(timeout=10.0):
+                raise TimeoutError(
+                    f"Producer failed to become ready. "
+                    f"Exit code: {producer_p.exitcode}"
+                )
+
+            t_e2e_start = time.perf_counter()
+
+            # Wait for producer completion.
+            producer_p.join(timeout=timeout)
+
+            if producer_p.is_alive():
+                raise TimeoutError(
+                    "Producer process timed out during simulation"
+                )
+
+            # Ask consumer to finish draining the buffer.
+            stop_consumer.set()
+            consumer_p.join(timeout=5.0)
+
+            if consumer_p.is_alive():
+                raise TimeoutError(
+                    "Consumer process timed out while draining orders"
+                )
+
+            e2e_duration = time.perf_counter() - t_e2e_start
+
+            # Retrieve results without using Queue.empty().
+            try:
+                producer_res = producer_q.get(timeout=2.0)
+            except queue.Empty:
+                producer_res = {
+                    "status": "error",
+                    "error": "Producer returned no result",
+                }
+
+            try:
+                consumer_res = consumer_q.get(timeout=2.0)
+            except queue.Empty:
+                consumer_res = {
+                    "status": "error",
+                    "error": "Consumer returned no result",
+                }
+
+            # Check process exit codes.
+            if producer_p.exitcode != 0:
+                producer_res["status"] = "error"
+                producer_res["error"] = (
+                    f"Producer exited with code {producer_p.exitcode}"
+                )
+
+            if consumer_p.exitcode != 0:
+                consumer_res["status"] = "error"
+                consumer_res["error"] = (
+                    f"Consumer exited with code {consumer_p.exitcode}"
+                )
+
+            # Verify producer order counts.
+            if producer_res.get("status") == "success":
+                generated = producer_res.get("orders_generated", 0)
+                submitted = producer_res.get("orders_submitted", 0)
+                failed = producer_res.get("orders_failed", 0)
+
+                if (
+                    generated != total_orders
+                    or submitted != total_orders
+                    or failed != 0
+                ):
+                    producer_res["status"] = "error"
+                    producer_res["error"] = (
+                        "Producer order count mismatch: "
+                        f"generated={generated}, "
+                        f"submitted={submitted}, failed={failed}"
+                    )
+
+            # Verify consumer processed every submitted order.
+            if (
+                producer_res.get("status") == "success"
+                and consumer_res.get("status") == "success"
+            ):
+                submitted = producer_res.get("orders_submitted", 0)
+                drained = consumer_res.get("orders_drained", 0)
+
+                if submitted != drained:
+                    consumer_res["status"] = "error"
+                    consumer_res["error"] = (
+                        f"Order count mismatch: "
+                        f"submitted={submitted}, drained={drained}"
+                    )
+
+            # Attach end-to-end metrics.
+            consumer_res["end_to_end_duration_seconds"] = e2e_duration
+
+            drained = consumer_res.get("orders_drained", 0)
+
+            consumer_res["end_to_end_throughput_ops_per_second"] = (
+                drained / e2e_duration if e2e_duration > 0 else 0.0
+            )
+
+            return producer_res, consumer_res
+
+    finally:
+        # Always request consumer shutdown.
         stop_consumer.set()
-        consumer_p.join(timeout=5.0)
-        if consumer_p.is_alive():
-            consumer_p.terminate()
 
-        t_e2e_end = time.perf_counter()
-        e2e_duration = t_e2e_end - t_e2e_start
+        # Ensure no child process is left running.
+        for process in started_processes:
+            if process.is_alive():
+                process.terminate()
 
-        # Retrieve payloads from queues
-        producer_res: Dict[str, Any] = (
-            producer_q.get(timeout=2.0) if not producer_q.empty() else {"status": "no_output"}
-        )
-        consumer_res: Dict[str, Any] = (
-            consumer_q.get(timeout=2.0) if not consumer_q.empty() else {"status": "no_output"}
-        )
+            process.join(timeout=2.0)
 
-        # Attach end-to-end pipeline metrics
-        consumer_res["end_to_end_duration_seconds"] = e2e_duration
-        drained = consumer_res.get("orders_drained", 0)
-        consumer_res["end_to_end_throughput_ops_per_second"] = (
-            (drained / e2e_duration) if e2e_duration > 0 else 0.0
-        )
+        # Release queue resources.
+        producer_q.cancel_join_thread()
+        consumer_q.cancel_join_thread()
 
-    return producer_res, consumer_res
+        producer_q.close()
+        consumer_q.close()
