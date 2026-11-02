@@ -9,6 +9,13 @@ class OrderBook:
 
     def add_order(self, order_id: int, side: int, price_ticks: int, quantity: int):
         trade_events = []
+        if side not in (0, 1):
+            raise ValueError("Side must be 0 (BUY) or 1 (SELL)")
+        if price_ticks <= 0:
+            raise ValueError("Price must be greater than 0")
+
+        if quantity <= 0:
+            raise ValueError("Quantity must be greater than 0")
         
         if side == 0:  # BUY Order
             while quantity > 0 and self.asks:
