@@ -1,6 +1,14 @@
 import mmap
 import pytest
-
+import struct
+from src.ipc.shared_ring_buffer import (
+    BUFFER_SIZE,
+    CAPACITY,
+    initialize_header,
+    get_indices,
+    put_order,
+    get_order,
+)
 from src.ipc.shared_ring_buffer import (
     BUFFER_SIZE,
     CAPACITY,
@@ -163,3 +171,21 @@ def test_file_backed_producer_consumer(tmp_path):
     finally:
         consumer_memory.close()
         consumer_file.close()
+
+@pytest.mark.parametrize(
+    "read_index, write_index",
+    [
+        (CAPACITY, 0),  # Invalid read index
+        (0, CAPACITY),  # Invalid write index
+    ],
+)
+def test_invalid_ring_buffer_indexes(read_index, write_index):
+    memory = create_memory()
+
+    try:
+        struct.pack_into("!II", memory, 0, read_index, write_index)
+
+        with pytest.raises(ValueError, match="Ring buffer index is out of range"):
+            get_indices(memory)
+    finally:
+        memory.close()

@@ -33,7 +33,12 @@ def initialize_header(memory):
     struct.pack_into("!II", memory, 0, 0, 0)
 
 def get_indices(memory):
-    return struct.unpack_from("!II", memory, 0)
+    read_index, write_index = struct.unpack_from("!II", memory, 0)
+
+    if read_index >= CAPACITY or write_index >= CAPACITY:
+        raise ValueError("Ring buffer index is out of range")
+
+    return read_index, write_index
 
 def set_indices(memory, read_index, write_index):
     struct.pack_into("!II", memory, 0, read_index, write_index)
