@@ -9,10 +9,24 @@ class OrderBook:
 
     def add_order(self, order_id: int, side: int, price_ticks: int, quantity: int):
         trade_events = []
+        if type(order_id) is not int:
+            raise TypeError("Order ID must be an integer")
+        if not 1 <= order_id <= 4294967295:
+            raise ValueError("Order ID must be between 1 and 4294967295")
+        if type(side) is not int:
+            raise TypeError("Side must be an integer")
+
         if side not in (0, 1):
             raise ValueError("Side must be 0 (BUY) or 1 (SELL)")
+
+        if type(price_ticks) is not int:
+            raise TypeError("Price must be an integer")
+
         if price_ticks <= 0:
             raise ValueError("Price must be greater than 0")
+
+        if type(quantity) is not int:
+            raise TypeError("Quantity must be an integer")
 
         if quantity <= 0:
             raise ValueError("Quantity must be greater than 0")

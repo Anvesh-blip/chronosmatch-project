@@ -95,3 +95,62 @@ def test_zero_order_quantity():
 
     with pytest.raises(ValueError):
         book.add_order(803, 0, 15000, 0)
+def test_boolean_side_is_rejected():
+    book = OrderBook()
+
+    with pytest.raises(TypeError):
+        book.add_order(901, True, 15000, 5)
+
+
+def test_float_price_is_rejected():
+    book = OrderBook()
+
+    with pytest.raises(TypeError):
+        book.add_order(902, 0, 15000.5, 5)
+
+
+def test_float_quantity_is_rejected():
+    book = OrderBook()
+
+    with pytest.raises(TypeError):
+        book.add_order(903, 0, 15000, 2.5)
+
+
+def test_boolean_quantity_is_rejected():
+    book = OrderBook()
+
+    with pytest.raises(TypeError):
+        book.add_order(904, 0, 15000, True)
+def test_boolean_order_id_is_rejected():
+    book = OrderBook()
+
+    with pytest.raises(TypeError):
+        book.add_order(True, 0, 15000, 5)
+
+
+def test_float_order_id_is_rejected():
+    book = OrderBook()
+
+    with pytest.raises(TypeError):
+        book.add_order(1.5, 0, 15000, 5)
+
+
+def test_zero_order_id_is_rejected():
+    book = OrderBook()
+
+    with pytest.raises(ValueError):
+        book.add_order(0, 0, 15000, 5)
+
+
+def test_negative_order_id_is_rejected():
+    book = OrderBook()
+
+    with pytest.raises(ValueError):
+        book.add_order(-1, 0, 15000, 5)
+
+
+def test_order_id_above_uint32_is_rejected():
+    book = OrderBook()
+
+    with pytest.raises(ValueError):
+        book.add_order(4294967296, 0, 15000, 5)
