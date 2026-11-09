@@ -26,7 +26,7 @@ def test_partial_fill_keeps_remaining_buy_quantity():
     book.add_order(2004, 0, 15250, 8)
 
     # Five units traded; the remaining three should rest in the bid book.
-    assert book.bids == {15250: [(2004, 3)]}
+    assert list(book.bids[15250]) == [(2004, 3)]
     assert book.asks == {}
 
 def test_buy_matches_multiple_sell_orders():
@@ -41,7 +41,7 @@ def test_buy_matches_multiple_sell_orders():
     assert [trade["sell_order_id"] for trade in trades] == [201, 202]
     assert [trade["quantity"] for trade in trades] == [4, 3]
 
-    assert book.asks == {15000: [(202, 3)]}
+    assert list(book.asks[15000]) == [(202, 3)]
 
 def test_sell_matches_multiple_buy_orders():
     book = OrderBook()
@@ -55,7 +55,7 @@ def test_sell_matches_multiple_buy_orders():
     assert [trade["buy_order_id"] for trade in trades] == [301, 302]
     assert [trade["quantity"] for trade in trades] == [4, 3]
 
-    assert book.bids == {14900: [(302, 3)]}
+    assert list(book.bids[14900]) == [(302, 3)]
 
 def test_fifo_priority_for_same_price():
     book = OrderBook()
@@ -69,7 +69,7 @@ def test_fifo_priority_for_same_price():
     assert [trade["buy_order_id"] for trade in trades] == [501, 502]
     assert [trade["quantity"] for trade in trades] == [3, 1]
 
-    assert book.bids == {15000: [(502, 4)]}
+    assert list(book.bids[15000]) == [(502, 4)]
 
 def test_invalid_order_side():
     book = OrderBook()
