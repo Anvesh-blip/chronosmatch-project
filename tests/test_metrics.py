@@ -14,6 +14,23 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertEqual(latency, 20.0)
         self.assertEqual(metrics.processed_orders, 1)
 
+    def test_negative_start_time_is_rejected(self):
+        metrics = PerformanceMetrics()
+
+        with self.assertRaises(ValueError):
+            metrics.record_latency(-1, 100)
+
+    def test_negative_end_time_is_rejected(self):
+        metrics = PerformanceMetrics()
+
+        with self.assertRaises(ValueError):
+            metrics.record_latency(100, -1)
+
+    def test_invalid_timestamp_type_is_rejected(self):
+        metrics = PerformanceMetrics()
+
+        with self.assertRaises(TypeError):
+            metrics.record_latency("100", 200)
     def test_empty_summary(self):
         metrics = PerformanceMetrics()
         summary = metrics.get_summary()

@@ -1,5 +1,4 @@
-
-from time import perf_counter_ns
+﻿from time import perf_counter_ns
 from statistics import mean
 
 
@@ -10,6 +9,15 @@ class PerformanceMetrics:
         self.start_time = perf_counter_ns()
 
     def record_latency(self, start_ns, end_ns):
+        if not isinstance(start_ns, int) or isinstance(start_ns, bool):
+            raise TypeError("Start time must be an integer")
+
+        if not isinstance(end_ns, int) or isinstance(end_ns, bool):
+            raise TypeError("End time must be an integer")
+
+        if start_ns < 0 or end_ns < 0:
+            raise ValueError("Timestamps cannot be negative")
+
         if end_ns < start_ns:
             raise ValueError("End time cannot be before start time")
 
